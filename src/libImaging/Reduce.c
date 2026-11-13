@@ -1457,8 +1457,13 @@ ImagingReduce(Imaging imIn, int xscale, int yscale, int box[4]) {
         return (Imaging)ImagingError_ModeError();
     }
 
+    /* Round the size up. Dividing before adding avoids overflowing for a
+       large scale.
+     */
     imOut = ImagingNewDirty(
-        imIn->mode, (box[2] + xscale - 1) / xscale, (box[3] + yscale - 1) / yscale
+        imIn->mode,
+        box[2] ? (box[2] - 1) / xscale + 1 : 0,
+        box[3] ? (box[3] - 1) / yscale + 1 : 0
     );
     if (!imOut) {
         return NULL;

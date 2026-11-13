@@ -53,9 +53,10 @@ Note: All data is stored in little-Endian (Intel) byte order.
 
 from __future__ import annotations
 
+__lazy_modules__ = {"io", "struct"}
+
 import struct
 from enum import IntEnum
-from io import BytesIO
 
 from . import Image, ImageFile
 
@@ -76,7 +77,7 @@ class FtexImageFile(ImageFile.ImageFile):
         if not _accept(self.fp.read(4)):
             msg = "not an FTEX file"
             raise SyntaxError(msg)
-        struct.unpack("<i", self.fp.read(4))  # version
+        self.fp.read(4)  # version
         self._size = struct.unpack("<2i", self.fp.read(8))
         mipmap_count, format_count = struct.unpack("<2i", self.fp.read(8))
 
@@ -87,26 +88,17 @@ class FtexImageFile(ImageFile.ImageFile):
             raise ValueError(msg)
 
         format, where = struct.unpack("<2i", self.fp.read(8))
-        self.fp.seek(where)
-        (mipmap_size,) = struct.unpack("<i", self.fp.read(4))
 
-        data = self.fp.read(mipmap_size)
-
+        offset = where + 4
         if format == Format.DXT1:
             self._mode = "RGBA"
-            self.tile = [ImageFile._Tile("bcn", (0, 0) + self.size, 0, (1,))]
+            self.tile = [ImageFile._Tile("bcn", None, offset, (1,))]
         elif format == Format.UNCOMPRESSED:
             self._mode = "RGB"
-            self.tile = [ImageFile._Tile("raw", (0, 0) + self.size, 0, "RGB")]
+            self.tile = [ImageFile._Tile("raw", None, offset, "RGB")]
         else:
             msg = f"Invalid texture compression format: {repr(format)}"
             raise ValueError(msg)
-
-        self.fp.close()
-        self.fp = BytesIO(data)
-
-    def load_seek(self, pos: int) -> None:
-        pass
 
 
 def _accept(prefix: bytes) -> bool:

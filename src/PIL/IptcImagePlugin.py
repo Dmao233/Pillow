@@ -16,6 +16,8 @@
 #
 from __future__ import annotations
 
+__lazy_modules__ = {"PIL._binary", "io", "typing"}
+
 from io import BytesIO
 from typing import cast
 
@@ -123,9 +125,7 @@ class IptcImageFile(ImageFile.ImageFile):
 
         # tile
         if tag == (8, 10):
-            self.tile = [
-                ImageFile._Tile("iptc", (0, 0) + self.size, offset, (compression, band))
-            ]
+            self.tile = [ImageFile._Tile("iptc", None, offset, (compression, band))]
 
     def load(self) -> Image.core.PixelAccess | None:
         if self.tile:

@@ -10,7 +10,6 @@ from .helper import (
     assert_image_equal,
     assert_image_similar,
     hopper,
-    mark_if_feature_version,
 )
 
 TYPE_CHECKING = False
@@ -273,6 +272,41 @@ class TestImagingCoreResampleAccuracy:
         )
         ref = Image.new("RGB", (100, 100), "#1688ff")
         assert_image_equal(im, ref)
+
+    def test_box_downscale_includes_boundary_pixels(self) -> None:
+        # 13→6 places source x=6 on a bin edge; old range rounding dropped it.
+        # See #9939 (2755→688 dropped the central column for the same reason).
+        im = Image.new("L", (13, 1), 255)
+        im.putpixel((6, 0), 0)
+        out = im.resize((6, 1), Image.Resampling.BOX)
+        assert out.get_flattened_data() == (255, 255, 170, 255, 255, 255)
+
+        im = Image.new("L", (1, 13), 255)
+        im.putpixel((0, 6), 0)
+        out = im.resize((1, 6), Image.Resampling.BOX)
+        assert out.get_flattened_data() == (255, 255, 170, 255, 255, 255)
+
+        im = Image.new("L", (2755, 1), 255)
+        im.putpixel((1377, 0), 0)
+        out = im.resize((688, 1), Image.Resampling.BOX)
+        assert not all(value == 255 for value in out.get_flattened_data())
+
+        im = Image.new("L", (1, 1837), 255)
+        im.putpixel((0, 918), 0)
+        out = im.resize((1, 306), Image.Resampling.BOX)
+        assert not all(value == 255 for value in out.get_flattened_data())
+
+    def test_box_downscale_counts_each_pixel_once(self) -> None:
+        # 15→14 previously counted the central source pixel in two outputs.
+        im = Image.new("L", (15, 1))
+        im.putpixel((7, 0), 255)
+        out = im.resize((14, 1), Image.Resampling.BOX)
+        assert [value for value in out.get_flattened_data() if value] == [128]
+
+        im = Image.new("L", (1, 15))
+        im.putpixel((0, 7), 255)
+        out = im.resize((1, 14), Image.Resampling.BOX)
+        assert [value for value in out.get_flattened_data() if value] == [128]
 
 
 class TestCoreResampleConsistency:
@@ -555,9 +589,6 @@ class TestCoreResampleBox:
                 tiled.paste(tile, (x0, y0))
         return tiled
 
-    @mark_if_feature_version(
-        pytest.mark.valgrind_known_error, "libjpeg_turbo", "2.0", reason="Known Failing"
-    )
     def test_tiles(self) -> None:
         with Image.open("Tests/images/flower.jpg") as im:
             assert im.size == (480, 360)
@@ -568,9 +599,6 @@ class TestCoreResampleBox:
                 tiled = self.resize_tiled(im, dst_size, *tiles)
                 assert_image_similar(reference, tiled, 0.01)
 
-    @mark_if_feature_version(
-        pytest.mark.valgrind_known_error, "libjpeg_turbo", "2.0", reason="Known Failing"
-    )
     def test_subsample(self) -> None:
         # This test shows advantages of the subpixel resizing
         # after supersampling (e.g. during JPEG decoding).
